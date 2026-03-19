@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String     @id
+  email     String     @unique
+  createdAt DateTime   @default(now())
+  positions Position[]
+}
+
+model Position {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  symbol      String
+  strategy    String
+  entryPrice  Float
+  entryDate   DateTime
+  exitPrice   Float?
+  exitDate    DateTime?
+  shares      Int?
+  side        String    @default("LONG")
+  status      String    @default("OPEN")
+  exitSignal  String?
+  rMultiple   Float?
+  netPnl      Float?
+  contextNote String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
