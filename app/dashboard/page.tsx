@@ -21,6 +21,20 @@ type Position = {
 
 const fmt = (n: number) => n >= 0 ? "+$" + n.toFixed(2) : "-$" + Math.abs(n).toFixed(2)
 
+type ParsedRow = {
+  userId: string
+  symbol: string
+  strategy: "ORB" | "SWING"
+  side: "LONG" | "SHORT"
+  status: "OPEN"
+  entryPrice: number
+  entryDate: string
+  exitSignal: null
+  contextNote: null
+}
+
+type PasteStage = "idle" | "parsing" | "preview" | "importing" | "done" | "error"
+
 const formLabelStyle = { fontSize: "10px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "4px" }
 const inputStyle = { width: "100%", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none" }
 const selectStyle = { width: "100%", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none" }
@@ -68,6 +82,75 @@ export default function Dashboard() {
     rMultiple: "", netPnl: "", broker: "", fees: "", contextNote: ""
   })
   const [submitting, setSubmitting] = useState(false)
+
+  const [showPaste, setShowPaste] = useState(false)
+  const [pasteText, setPasteText] = useState("")
+  const [pasteStage, setPasteStage] = useState<PasteStage>("idle")
+  const [pasteError, setPasteError] = useState<string | null>(null)
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
+  const [skippedLines, setSkippedLines] = useState<string[]>([])
+
+  const resetPaste = () => {
+    setPasteText("")
+    setPasteStage("idle")
+    setPasteError(null)
+    setParsedRows([])
+    setSkippedLines([])
+  }
+
+  const closePaste = () => {
+    setShowPaste(false)
+    resetPaste()
+  }
+
+  const doParse = async () => {
+    if (!pasteText.trim()) return
+    setPasteStage("parsing")
+    setPasteError(null)
+    try {
+      const res = await fetch("/api/positions/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: pasteText, userId: "alex" }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPasteError(data?.error ?? "Parse failed")
+        setPasteStage("error")
+        return
+      }
+      setParsedRows(data.parsed ?? [])
+      setSkippedLines(data.skipped ?? [])
+      setPasteStage("preview")
+    } catch (err) {
+      setPasteError(String(err))
+      setPasteStage("error")
+    }
+  }
+
+  const doImport = async () => {
+    setPasteStage("importing")
+    setPasteError(null)
+    try {
+      const res = await fetch("/api/positions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ positions: parsedRows, userId: "alex" }),
+      })
+      const data = await res.json()
+      if (!res.ok || (data.errors && data.errors.length)) {
+        setPasteError(data.errors?.join("; ") ?? "Import failed")
+        setPasteStage("error")
+        return
+      }
+      setPasteStage("done")
+      closePaste()
+      load()
+    } catch (err) {
+      setPasteError(String(err))
+      setPasteStage("error")
+    }
+  }
 
   const set = (field: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm(f => ({ ...f, [field]: e.target.value }))
@@ -126,7 +209,15 @@ export default function Dashboard() {
     th: { textAlign: "left" as const, padding: "10px 12px", color: "#3d6480", fontSize: "11px", textTransform: "uppercase" as const, letterSpacing: "0.08em", borderBottom: "1px solid #1a3044" },
     td: { padding: "12px", borderBottom: "1px solid #0d1c2a", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "13px" },
     addBtn: { padding: "8px 18px", borderRadius: "7px", backgroundColor: "#22C55E", color: "#060e14", border: "none", fontWeight: 700, fontSize: "13px", cursor: "pointer" },
+    secondaryBtn: { padding: "8px 18px", borderRadius: "7px", backgroundColor: "#0d1c2a", color: "#e8f0f7", border: "1px solid #1a3044", fontWeight: 700, fontSize: "13px", cursor: "pointer" },
     formGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" },
+    modalOverlay: { position: "fixed" as const, inset: 0, backgroundColor: "rgba(6,14,20,0.85)", display: "flex", alignItems: "flex-start" as const, justifyContent: "center", padding: "48px 24px", zIndex: 50, overflowY: "auto" as const },
+    modalCard: { width: "100%", maxWidth: "720px", backgroundColor: "#0d1c2a", border: "1px solid #1a3044", borderRadius: "10px", padding: "24px" },
+    modalHeader: { fontSize: "12px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "16px" },
+    textarea: { width: "100%", minHeight: "220px", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none", resize: "vertical" as const },
+    previewList: { maxHeight: "260px", overflowY: "auto" as const, border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", color: "#e8f0f7", marginBottom: "12px" },
+    skippedBox: { border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "11px", color: "#C49A3C", marginBottom: "12px" },
+    errorBox: { border: "1px solid #f87171", borderRadius: "6px", padding: "8px 12px", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", color: "#f87171", marginBottom: "12px" },
   }
 
   const toggleBtn = (active: boolean) => ({
@@ -146,10 +237,99 @@ export default function Dashboard() {
     <div style={s.page}>
       <div style={s.header}>
         <div style={s.title}>Position<span style={s.titleAccent}>Book</span></div>
-        <button style={s.addBtn} onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "+ Log Position"}
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button style={s.secondaryBtn} onClick={() => setShowPaste(true)}>
+            Paste Daily Data
+          </button>
+          <button style={s.addBtn} onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "+ Log Position"}
+          </button>
+        </div>
       </div>
+
+      {showPaste && (
+        <div style={s.modalOverlay} onClick={closePaste}>
+          <div style={s.modalCard} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div style={s.modalHeader}>Paste Daily Data</div>
+              <button style={{ ...s.secondaryBtn, padding: "4px 12px", fontSize: "12px" }} onClick={closePaste}>Close</button>
+            </div>
+
+            {pasteError && <div style={s.errorBox}>{pasteError}</div>}
+
+            {(pasteStage === "idle" || pasteStage === "parsing" || pasteStage === "error") && (
+              <>
+                <textarea
+                  style={s.textarea}
+                  value={pasteText}
+                  onChange={e => setPasteText(e.target.value)}
+                  placeholder={"3/27/26\nORB:\nLONG: FIX 1378.77 (1366.77) JCI 132.26 (131.29)\n..."}
+                />
+                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <button
+                    style={{ ...s.addBtn, opacity: pasteStage === "parsing" || !pasteText.trim() ? 0.6 : 1 }}
+                    onClick={doParse}
+                    disabled={pasteStage === "parsing" || !pasteText.trim()}
+                  >
+                    {pasteStage === "parsing" ? "Parsing..." : "Parse"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {(pasteStage === "preview" || pasteStage === "importing") && (
+              <>
+                <div style={{ fontSize: "11px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "8px" }}>
+                  Parsed ({parsedRows.length})
+                </div>
+                <div style={s.previewList}>
+                  {parsedRows.length === 0 ? (
+                    <div style={{ color: "#3d6480" }}>No positions parsed.</div>
+                  ) : (
+                    parsedRows.map((p, i) => (
+                      <div key={i} style={{ padding: "4px 0", borderBottom: i < parsedRows.length - 1 ? "1px solid #0d1c2a" : "none" }}>
+                        <span style={{ color: "#86EFAC", fontWeight: 700 }}>{p.symbol}</span>
+                        {" "}
+                        <span style={badge(p.side)}>{p.side}</span>
+                        {" "}
+                        <span style={{ color: "#3d6480" }}>{p.strategy}</span>
+                        {" "}
+                        <span>${p.entryPrice.toFixed(2)}</span>
+                        {" "}
+                        <span style={{ color: "#3d6480" }}>{new Date(p.entryDate).toLocaleDateString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {skippedLines.length > 0 && (
+                  <>
+                    <div style={{ fontSize: "11px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "8px" }}>
+                      Skipped ({skippedLines.length})
+                    </div>
+                    <div style={s.skippedBox}>
+                      {skippedLines.map((l, i) => <div key={i}>{l}</div>)}
+                    </div>
+                  </>
+                )}
+
+                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <button
+                    style={{ ...s.addBtn, opacity: pasteStage === "importing" || parsedRows.length === 0 ? 0.6 : 1 }}
+                    onClick={doImport}
+                    disabled={pasteStage === "importing" || parsedRows.length === 0}
+                  >
+                    {pasteStage === "importing" ? "Importing..." : `Confirm Import (${parsedRows.length})`}
+                  </button>
+                  <button style={s.secondaryBtn} onClick={resetPaste} disabled={pasteStage === "importing"}>
+                    Back
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={s.kpiRow}>
         {kpis.map(k => (
