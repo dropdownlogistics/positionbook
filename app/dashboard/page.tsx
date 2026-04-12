@@ -21,6 +21,41 @@ type Position = {
 
 const fmt = (n: number) => n >= 0 ? "+$" + n.toFixed(2) : "-$" + Math.abs(n).toFixed(2)
 
+const formLabelStyle = { fontSize: "10px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "4px" }
+const inputStyle = { width: "100%", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none" }
+const selectStyle = { width: "100%", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none" }
+
+function F({ label, value, onChange, type = "text", placeholder = "" }: {
+  label: string
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  type?: string
+  placeholder?: string
+}) {
+  return (
+    <div>
+      <div style={formLabelStyle}>{label}</div>
+      <input style={inputStyle} type={type} placeholder={placeholder} value={value} onChange={onChange} />
+    </div>
+  )
+}
+
+function Sel({ label, value, onChange, options }: {
+  label: string
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
+  options: string[]
+}) {
+  return (
+    <div>
+      <div style={formLabelStyle}>{label}</div>
+      <select style={selectStyle} value={value} onChange={onChange}>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +68,9 @@ export default function Dashboard() {
     rMultiple: "", netPnl: "", broker: "", fees: "", contextNote: ""
   })
   const [submitting, setSubmitting] = useState(false)
+
+  const set = (field: keyof typeof form) => (e: { target: { value: string } }) =>
+    setForm(f => ({ ...f, [field]: e.target.value }))
 
   const load = async () => {
     setLoading(true)
@@ -88,10 +126,7 @@ export default function Dashboard() {
     th: { textAlign: "left" as const, padding: "10px 12px", color: "#3d6480", fontSize: "11px", textTransform: "uppercase" as const, letterSpacing: "0.08em", borderBottom: "1px solid #1a3044" },
     td: { padding: "12px", borderBottom: "1px solid #0d1c2a", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "13px" },
     addBtn: { padding: "8px 18px", borderRadius: "7px", backgroundColor: "#22C55E", color: "#060e14", border: "none", fontWeight: 700, fontSize: "13px", cursor: "pointer" },
-    input: { width: "100%", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none" },
     formGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" },
-    formLabel: { fontSize: "10px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "4px" },
-    select: { width: "100%", backgroundColor: "#0a1520", border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", color: "#e8f0f7", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", outline: "none" },
   }
 
   const toggleBtn = (active: boolean) => ({
@@ -106,14 +141,6 @@ export default function Dashboard() {
     backgroundColor: side === "LONG" ? "rgba(134,239,172,0.1)" : "rgba(248,113,113,0.1)",
     color: side === "LONG" ? "#86EFAC" : "#f87171",
   })
-
-  const F = ({ label, field, type = "text", placeholder = "" }: { label: string, field: keyof typeof form, type?: string, placeholder?: string }) => (
-    <div>
-      <div style={s.formLabel}>{label}</div>
-      <input style={s.input} type={type} placeholder={placeholder} value={form[field]}
-        onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} />
-    </div>
-  )
 
   return (
     <div style={s.page}>
@@ -137,33 +164,21 @@ export default function Dashboard() {
         <div style={{ backgroundColor: "#0d1c2a", border: "1px solid #1a3044", borderRadius: "10px", padding: "24px", marginBottom: "24px" }}>
           <div style={{ fontSize: "12px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "16px" }}>Log Position</div>
           <div style={s.formGrid}>
-            <F label="Symbol" field="symbol" placeholder="NVDA" />
-            <F label="Strategy" field="strategy" placeholder="ORB" />
-            <div>
-              <div style={s.formLabel}>Side</div>
-              <select style={s.select} value={form.side} onChange={e => setForm(f => ({ ...f, side: e.target.value }))}>
-                <option value="LONG">LONG</option>
-                <option value="SHORT">SHORT</option>
-              </select>
-            </div>
-            <div>
-              <div style={s.formLabel}>Status</div>
-              <select style={s.select} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                <option value="OPEN">OPEN</option>
-                <option value="CLOSED">CLOSED</option>
-              </select>
-            </div>
-            <F label="Entry Price" field="entryPrice" type="number" placeholder="0.00" />
-            <F label="Entry Date" field="entryDate" type="date" />
-            <F label="Shares" field="shares" type="number" placeholder="100" />
-            <F label="Broker" field="broker" placeholder="Tradier" />
-            <F label="Exit Price" field="exitPrice" type="number" placeholder="0.00" />
-            <F label="Exit Date" field="exitDate" type="date" />
-            <F label="Exit Signal" field="exitSignal" placeholder="EOD_STOP" />
-            <F label="R-Multiple" field="rMultiple" type="number" placeholder="2.1" />
-            <F label="Net PnL" field="netPnl" type="number" placeholder="266.00" />
-            <F label="Fees" field="fees" type="number" placeholder="1.00" />
-            <F label="Notes" field="contextNote" placeholder="optional" />
+            <F label="Symbol" value={form.symbol} onChange={set("symbol")} placeholder="NVDA" />
+            <F label="Strategy" value={form.strategy} onChange={set("strategy")} placeholder="ORB" />
+            <Sel label="Side" value={form.side} onChange={set("side")} options={["LONG", "SHORT"]} />
+            <Sel label="Status" value={form.status} onChange={set("status")} options={["OPEN", "CLOSED"]} />
+            <F label="Entry Price" value={form.entryPrice} onChange={set("entryPrice")} type="number" placeholder="0.00" />
+            <F label="Entry Date" value={form.entryDate} onChange={set("entryDate")} type="date" />
+            <F label="Shares" value={form.shares} onChange={set("shares")} type="number" placeholder="100" />
+            <F label="Broker" value={form.broker} onChange={set("broker")} placeholder="Tradier" />
+            <F label="Exit Price" value={form.exitPrice} onChange={set("exitPrice")} type="number" placeholder="0.00" />
+            <F label="Exit Date" value={form.exitDate} onChange={set("exitDate")} type="date" />
+            <F label="Exit Signal" value={form.exitSignal} onChange={set("exitSignal")} placeholder="EOD_STOP" />
+            <F label="R-Multiple" value={form.rMultiple} onChange={set("rMultiple")} type="number" placeholder="2.1" />
+            <F label="Net PnL" value={form.netPnl} onChange={set("netPnl")} type="number" placeholder="266.00" />
+            <F label="Fees" value={form.fees} onChange={set("fees")} type="number" placeholder="1.00" />
+            <F label="Notes" value={form.contextNote} onChange={set("contextNote")} placeholder="optional" />
           </div>
           <button style={{ ...s.addBtn, opacity: submitting ? 0.6 : 1 }} onClick={submit} disabled={submitting}>
             {submitting ? "Saving..." : "Save Position"}
