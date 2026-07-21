@@ -9,7 +9,8 @@ type Position = {
   status: string
   entryPrice: number
   exitPrice: number | null
-  shares: number
+  stopPrice: number | null
+  shares: number | null
   entryDate: string
   rMultiple: number | null
   netPnl: number | null
@@ -24,10 +25,11 @@ const fmt = (n: number) => n >= 0 ? "+$" + n.toFixed(2) : "-$" + Math.abs(n).toF
 type ParsedRow = {
   userId: string
   symbol: string
-  strategy: "ORB" | "SWING"
+  strategy: "ORB" | "SWING" | "MA_BOUNCE"
   side: "LONG" | "SHORT"
   status: "OPEN"
   entryPrice: number
+  stopPrice: number | null
   entryDate: string
   exitSignal: null
   contextNote: null
@@ -89,6 +91,13 @@ export default function Dashboard() {
   const [pasteError, setPasteError] = useState<string | null>(null)
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [skippedLines, setSkippedLines] = useState<string[]>([])
+
+  const [closeTarget, setCloseTarget] = useState<Position | null>(null)
+  const [closeForm, setCloseForm] = useState({
+    exitPrice: "", exitDate: "", exitSignal: "", shares: "", fees: "", broker: ""
+  })
+  const [closeSubmitting, setCloseSubmitting] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
 
   const resetPaste = () => {
     setPasteText("")
@@ -154,6 +163,53 @@ export default function Dashboard() {
 
   const set = (field: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm(f => ({ ...f, [field]: e.target.value }))
+
+  const setClose = (field: keyof typeof closeForm) => (e: { target: { value: string } }) =>
+    setCloseForm(f => ({ ...f, [field]: e.target.value }))
+
+  const openClose = (p: Position) => {
+    setCloseTarget(p)
+    setCloseError(null)
+    setCloseForm({
+      exitPrice: "",
+      exitDate: new Date().toISOString().slice(0, 10),
+      exitSignal: "",
+      shares: p.shares !== null ? String(p.shares) : "",
+      fees: p.fees !== null ? String(p.fees) : "",
+      broker: p.broker ?? "",
+    })
+  }
+
+  const submitClose = async () => {
+    if (!closeTarget || !closeForm.exitPrice || !closeForm.exitDate) return
+    setCloseSubmitting(true)
+    setCloseError(null)
+    try {
+      const res = await fetch(`/api/positions/${closeTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exitPrice: closeForm.exitPrice,
+          exitDate: closeForm.exitDate,
+          exitSignal: closeForm.exitSignal || null,
+          shares: closeForm.shares || null,
+          fees: closeForm.fees || null,
+          broker: closeForm.broker || null,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setCloseError(data?.error ?? `Close failed (${res.status})`)
+        return
+      }
+      setCloseTarget(null)
+      load()
+    } catch (err) {
+      setCloseError(String(err))
+    } finally {
+      setCloseSubmitting(false)
+    }
+  }
 
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -242,6 +298,8 @@ export default function Dashboard() {
     previewList: { maxHeight: "260px", overflowY: "auto" as const, border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", color: "#e8f0f7", marginBottom: "12px" },
     skippedBox: { border: "1px solid #1a3044", borderRadius: "6px", padding: "8px 12px", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "11px", color: "#C49A3C", marginBottom: "12px" },
     errorBox: { border: "1px solid #f87171", borderRadius: "6px", padding: "8px 12px", fontFamily: "var(--font-mono, JetBrains Mono), monospace", fontSize: "12px", color: "#f87171", marginBottom: "12px" },
+    rowBtn: { padding: "4px 12px", borderRadius: "6px", backgroundColor: "#0d1c2a", color: "#86EFAC", border: "1px solid #1a3044", fontWeight: 700, fontSize: "11px", cursor: "pointer" },
+    metaRow: { fontSize: "11px", color: "#3d6480", fontFamily: "var(--font-mono, JetBrains Mono), monospace", marginBottom: "16px", lineHeight: 1.7 },
   }
 
   const toggleBtn = (active: boolean) => ({
@@ -320,6 +378,10 @@ export default function Dashboard() {
                         {" "}
                         <span>${p.entryPrice.toFixed(2)}</span>
                         {" "}
+                        {p.stopPrice !== null
+                          ? <span style={{ color: "#C49A3C" }}>stop ${p.stopPrice.toFixed(2)}</span>
+                          : <span style={{ color: "#3d6480" }}>no stop</span>}
+                        {" "}
                         <span style={{ color: "#3d6480" }}>{new Date(p.entryDate).toLocaleDateString()}</span>
                       </div>
                     ))
@@ -351,6 +413,55 @@ export default function Dashboard() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {closeTarget && (
+        <div style={s.modalOverlay} onClick={() => setCloseTarget(null)}>
+          <div style={{ ...s.modalCard, maxWidth: "560px" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div style={s.modalHeader}>Close Position — {closeTarget.symbol}</div>
+              <button style={{ ...s.secondaryBtn, padding: "4px 12px", fontSize: "12px" }} onClick={() => setCloseTarget(null)}>Close</button>
+            </div>
+
+            {closeError && <div style={s.errorBox}>{closeError}</div>}
+
+            <div style={s.metaRow}>
+              <div>
+                <span style={badge(closeTarget.side)}>{closeTarget.side}</span>
+                {"  "}{closeTarget.strategy}{"  "}entry ${closeTarget.entryPrice.toFixed(2)}
+                {"  "}stop {closeTarget.stopPrice !== null ? "$" + closeTarget.stopPrice.toFixed(2) : "none"}
+              </div>
+              {closeTarget.stopPrice === null && (
+                <div style={{ color: "#C49A3C" }}>No stop on record — R-multiple cannot be computed.</div>
+              )}
+              {!closeForm.shares && (
+                <div style={{ color: "#C49A3C" }}>No share count — net PnL cannot be computed.</div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", marginBottom: "16px" }}>
+              <F label="Exit Price" value={closeForm.exitPrice} onChange={setClose("exitPrice")} type="number" placeholder="0.00" />
+              <F label="Exit Date" value={closeForm.exitDate} onChange={setClose("exitDate")} type="date" />
+              <F label="Shares" value={closeForm.shares} onChange={setClose("shares")} type="number" placeholder="100" />
+              <F label="Exit Signal" value={closeForm.exitSignal} onChange={setClose("exitSignal")} placeholder="EOD_STOP" />
+              <F label="Fees" value={closeForm.fees} onChange={setClose("fees")} type="number" placeholder="1.00" />
+              <F label="Broker" value={closeForm.broker} onChange={setClose("broker")} placeholder="Tradier" />
+            </div>
+
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                style={{ ...s.addBtn, opacity: closeSubmitting || !closeForm.exitPrice || !closeForm.exitDate ? 0.6 : 1 }}
+                onClick={submitClose}
+                disabled={closeSubmitting || !closeForm.exitPrice || !closeForm.exitDate}
+              >
+                {closeSubmitting ? "Closing..." : "Confirm Close"}
+              </button>
+              <button style={s.secondaryBtn} onClick={() => setCloseTarget(null)} disabled={closeSubmitting}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -406,8 +517,8 @@ export default function Dashboard() {
         <table style={s.table}>
           <thead>
             <tr>
-              {["Symbol","Side","Strategy","Entry","Exit","Shares","R","PnL","Date","Status"].map(h => (
-                <th key={h} style={s.th}>{h}</th>
+              {["Symbol","Side","Strategy","Entry","Stop","Exit","Shares","R","PnL","Date","Status",""].map((h, i) => (
+                <th key={i} style={s.th}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -418,14 +529,22 @@ export default function Dashboard() {
                 <td style={s.td}><span style={badge(p.side)}>{p.side}</span></td>
                 <td style={{ ...s.td, color: "#3d6480" }}>{p.strategy}</td>
                 <td style={s.td}>${p.entryPrice.toFixed(2)}</td>
-                <td style={s.td}>{p.exitPrice ? "$" + Number(p.exitPrice).toFixed(2) : "-"}</td>
-                <td style={s.td}>{p.shares}</td>
+                <td style={{ ...s.td, color: p.stopPrice !== null ? "#C49A3C" : "#3d6480" }}>
+                  {p.stopPrice !== null ? "$" + p.stopPrice.toFixed(2) : "-"}
+                </td>
+                <td style={s.td}>{p.exitPrice !== null ? "$" + Number(p.exitPrice).toFixed(2) : "-"}</td>
+                <td style={s.td}>{p.shares !== null ? p.shares : "-"}</td>
                 <td style={s.td}>{p.rMultiple !== null ? p.rMultiple + "R" : "-"}</td>
                 <td style={{ ...s.td, color: p.netPnl !== null ? (p.netPnl >= 0 ? "#86EFAC" : "#f87171") : "#3d6480" }}>
                   {p.netPnl !== null ? fmt(p.netPnl) : "-"}
                 </td>
                 <td style={s.td}>{new Date(p.entryDate).toLocaleDateString()}</td>
                 <td style={{ ...s.td, color: p.status === "OPEN" ? "#C49A3C" : "#3d6480" }}>{p.status}</td>
+                <td style={s.td}>
+                  {p.status === "OPEN" && (
+                    <button style={s.rowBtn} onClick={() => openClose(p)}>Close</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

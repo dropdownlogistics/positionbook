@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 
+type Strategy = "ORB" | "SWING" | "MA_BOUNCE"
+
 type ParsedPosition = {
   userId: string
   symbol: string
-  strategy: "ORB" | "SWING"
+  strategy: Strategy
   side: "LONG" | "SHORT"
   status: "OPEN"
   entryPrice: number
+  stopPrice: number | null
   entryDate: string
   exitSignal: null
   contextNote: null
 }
 
 const TOKEN_RE = /([A-Z][A-Z0-9.\-]{0,6})\s+(\d+(?:\.\d+)?)(?:\s*\(([\d.]+)\))?/g
+
+// Section headers. Accepts the separator variants a human actually types:
+// "MA BOUNCE:", "MA_BOUNCE:", "MA-BOUNCE". Normalized to the canonical
+// strategy value stored in the DB.
+const SECTION_HEADERS: { re: RegExp; strategy: Strategy }[] = [
+  { re: /^ORB\s*:?\s*$/i, strategy: "ORB" },
+  { re: /^SWING\s*:?\s*$/i, strategy: "SWING" },
+  { re: /^MA[\s_-]*BOUNCE\s*:?\s*$/i, strategy: "MA_BOUNCE" },
+]
 
 function parseDate(line: string): string | null {
   const m = line.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
@@ -49,14 +61,14 @@ export async function POST(req: NextRequest) {
   const parsed: ParsedPosition[] = []
   const skipped: string[] = []
   let entryDate: string | null = null
-  let section: "ORB" | "SWING" | null = null
+  let section: Strategy | null = null
 
   for (const line of lines) {
     const d = parseDate(line)
     if (d) { entryDate = d; continue }
 
-    if (/^ORB\s*:?\s*$/i.test(line)) { section = "ORB"; continue }
-    if (/^SWING\s*:?\s*$/i.test(line)) { section = "SWING"; continue }
+    const header = SECTION_HEADERS.find(h => h.re.test(line))
+    if (header) { section = header.strategy; continue }
 
     if (/^EV\b/i.test(line)) continue
     if (/\bWL\b|watchlist/i.test(line)) { skipped.push(line); continue }
@@ -67,9 +79,6 @@ export async function POST(req: NextRequest) {
       const side = sideMatch[1].toUpperCase() as "LONG" | "SHORT"
       const tokens = parseTokens(sideMatch[2])
       for (const t of tokens) {
-        if (t.stopPrice !== null) {
-          console.log(`stopPrice discarded (not in schema): ${t.symbol} stop=${t.stopPrice}`)
-        }
         parsed.push({
           userId: body.userId,
           symbol: t.symbol,
@@ -77,6 +86,7 @@ export async function POST(req: NextRequest) {
           side,
           status: "OPEN",
           entryPrice: t.entryPrice,
+          stopPrice: t.stopPrice,
           entryDate: entryDate,
           exitSignal: null,
           contextNote: null,

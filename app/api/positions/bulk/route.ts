@@ -7,9 +7,11 @@ type IncomingPosition = {
   side: string
   status?: string
   entryPrice: number
+  stopPrice?: number | null
   entryDate: string
   exitSignal?: string | null
   contextNote?: string | null
+  dataQuality?: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -30,9 +32,11 @@ export async function POST(req: NextRequest) {
       side: p.side,
       status: p.status ?? "OPEN",
       entryPrice: p.entryPrice,
+      stopPrice: p.stopPrice ?? null,
       entryDate: new Date(p.entryDate),
       exitSignal: p.exitSignal ?? null,
       contextNote: p.contextNote ?? null,
+      dataQuality: p.dataQuality ?? null,
     }))
 
     const result = await prisma.position.createMany({ data: rows })
