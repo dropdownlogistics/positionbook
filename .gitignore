@@ -45,3 +45,6 @@ next-env.d.ts
 prisma.config.ts
 
 positionbook-seed.csv
+
+# nested standalone repo — has its own .git, tracked separately
+/leverage-app/

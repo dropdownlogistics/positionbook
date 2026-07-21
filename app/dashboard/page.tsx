@@ -155,12 +155,26 @@ export default function Dashboard() {
   const set = (field: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm(f => ({ ...f, [field]: e.target.value }))
 
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   const load = async () => {
     setLoading(true)
-    const res = await fetch("/api/positions")
-    const data = await res.json()
-    setPositions(data)
-    setLoading(false)
+    setLoadError(null)
+    try {
+      const res = await fetch("/api/positions")
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !Array.isArray(data)) {
+        setLoadError(data?.error ?? `Failed to load positions (${res.status})`)
+        setPositions([])
+        return
+      }
+      setPositions(data)
+    } catch (err) {
+      setLoadError(String(err))
+      setPositions([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -181,18 +195,28 @@ export default function Dashboard() {
 
   const closed = positions.filter(p => p.status === "CLOSED")
   const open = positions.filter(p => p.status === "OPEN")
-  const wins = closed.filter(p => (p.netPnl ?? 0) > 0)
-  const winRate = closed.length ? ((wins.length / closed.length) * 100).toFixed(1) : "0.0"
-  const avgR = closed.length ? (closed.reduce((a, p) => a + (p.rMultiple ?? 0), 0) / closed.length).toFixed(2) : "0.00"
-  const netPnl = closed.reduce((a, p) => a + (p.netPnl ?? 0), 0)
+
+  // Only closed positions that actually carry a netPnl can be scored win/loss.
+  // Closed rows with netPnl === null are excluded from both numerator and denominator.
+  const scored = closed.filter(p => p.netPnl !== null)
+  const wins = scored.filter(p => p.netPnl !== null && p.netPnl > 0)
+  const winRate = scored.length ? ((wins.length / scored.length) * 100).toFixed(1) : null
+
+  // Average R over rows that have an R value — not over all closed rows.
+  const rScored = closed.filter(p => p.rMultiple !== null)
+  const avgR = rScored.length
+    ? (rScored.reduce((a, p) => a + (p.rMultiple as number), 0) / rScored.length).toFixed(2)
+    : null
+
+  const netPnl = scored.reduce((a, p) => a + (p.netPnl as number), 0)
   const visible = filter === "ALL" ? positions : positions.filter(p => p.status === filter)
 
   const kpis = [
     { label: "Total Positions", value: String(positions.length), color: "#e8f0f7" },
     { label: "Open", value: String(open.length), color: "#C49A3C" },
-    { label: "Win Rate", value: winRate + "%", color: "#e8f0f7" },
-    { label: "Avg R-Multiple", value: avgR + "R", color: "#86EFAC" },
-    { label: "Net PnL", value: closed.length ? fmt(netPnl) : "-", color: netPnl >= 0 ? "#86EFAC" : "#f87171" },
+    { label: "Win Rate", value: winRate !== null ? winRate + "%" : "-", color: "#e8f0f7" },
+    { label: "Avg R-Multiple", value: avgR !== null ? avgR + "R" : "-", color: "#86EFAC" },
+    { label: "Net PnL", value: scored.length ? fmt(netPnl) : "-", color: netPnl >= 0 ? "#86EFAC" : "#f87171" },
   ]
 
   const s = {
@@ -372,6 +396,8 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {loadError && <div style={s.errorBox}>{loadError}</div>}
+
       {loading ? (
         <div style={{ color: "#3d6480", fontFamily: "var(--font-mono)", fontSize: "13px", padding: "40px 0" }}>Loading...</div>
       ) : visible.length === 0 ? (
@@ -394,9 +420,9 @@ export default function Dashboard() {
                 <td style={s.td}>${p.entryPrice.toFixed(2)}</td>
                 <td style={s.td}>{p.exitPrice ? "$" + Number(p.exitPrice).toFixed(2) : "-"}</td>
                 <td style={s.td}>{p.shares}</td>
-                <td style={s.td}>{p.rMultiple ? p.rMultiple + "R" : "-"}</td>
-                <td style={{ ...s.td, color: p.netPnl ? (p.netPnl >= 0 ? "#86EFAC" : "#f87171") : "#3d6480" }}>
-                  {p.netPnl ? fmt(p.netPnl) : "-"}
+                <td style={s.td}>{p.rMultiple !== null ? p.rMultiple + "R" : "-"}</td>
+                <td style={{ ...s.td, color: p.netPnl !== null ? (p.netPnl >= 0 ? "#86EFAC" : "#f87171") : "#3d6480" }}>
+                  {p.netPnl !== null ? fmt(p.netPnl) : "-"}
                 </td>
                 <td style={s.td}>{new Date(p.entryDate).toLocaleDateString()}</td>
                 <td style={{ ...s.td, color: p.status === "OPEN" ? "#C49A3C" : "#3d6480" }}>{p.status}</td>

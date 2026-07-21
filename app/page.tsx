@@ -32,22 +32,22 @@ export default function Home() {
   }
 
   const tickerItems = [
-    { label: "WIN RATE", val: "30.5%" },
-    { label: "AVG R-MULTIPLE", val: "2.31R" },
-    { label: "TRADES TRACKED", val: "241" },
-    { label: "TOP TICKER", val: "SNDK +$266" },
+    { label: "WIN RATE", val: "TRACKED" },
+    { label: "AVG R-MULTIPLE", val: "TRACKED" },
+    { label: "TRADES LOGGED", val: "YOURS" },
     { label: "STRATEGIES", val: "ORB - MA BOUNCE - SWING" },
     { label: "OPEN POSITIONS", val: "LIVE" },
     { label: "SIGNAL", val: "STRUCTURE" },
     { label: "STRUCTURE", val: "EDGE" },
     { label: "NET PnL", val: "TRACKED" },
+    { label: "EQUITY CURVE", val: "TIMESTAMPED" },
     { label: "DATA", val: "YOURS" },
   ]
 
   const stats = [
-    { val: "241", label: "Trades analyzed at launch" },
-    { val: "2.31R", label: "Avg R-multiple tracked" },
-    { val: "100%", label: "Evidence-based" },
+    { val: "Every trade", label: "Logged, not remembered" },
+    { val: "Every setup", label: "Scored against its own history" },
+    { val: "Your data", label: "Private by default" },
   ]
 
   const features = [
