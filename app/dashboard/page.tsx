@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import { UserButton } from "@clerk/nextjs"
 
 type Position = {
   id: string
@@ -120,7 +121,7 @@ export default function Dashboard() {
       const res = await fetch("/api/positions/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: pasteText, userId: "alex" }),
+        body: JSON.stringify({ text: pasteText }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -144,7 +145,7 @@ export default function Dashboard() {
       const res = await fetch("/api/positions/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ positions: parsedRows, userId: "alex" }),
+        body: JSON.stringify({ positions: parsedRows }),
       })
       const data = await res.json()
       if (!res.ok || (data.errors && data.errors.length)) {
@@ -326,6 +327,9 @@ export default function Dashboard() {
           <button style={s.addBtn} onClick={() => setShowForm(!showForm)}>
             {showForm ? "Cancel" : "+ Log Position"}
           </button>
+          <div style={{ display: "flex", alignItems: "center", marginLeft: "4px" }}>
+            <UserButton />
+          </div>
         </div>
       </div>
 

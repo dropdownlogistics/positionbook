@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireUserId } from "@/lib/auth"
 
 type Strategy = "ORB" | "SWING" | "MA_BOUNCE"
 
@@ -52,9 +53,13 @@ function parseTokens(rest: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null) as { text?: string; userId?: string } | null
-  if (!body?.text || !body?.userId) {
-    return NextResponse.json({ error: "text and userId required" }, { status: 400 })
+  // userId is derived from the session, never accepted from the caller.
+  const userId = await requireUserId()
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = await req.json().catch(() => null) as { text?: string } | null
+  if (!body?.text) {
+    return NextResponse.json({ error: "text required" }, { status: 400 })
   }
 
   const lines = body.text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
@@ -80,7 +85,7 @@ export async function POST(req: NextRequest) {
       const tokens = parseTokens(sideMatch[2])
       for (const t of tokens) {
         parsed.push({
-          userId: body.userId,
+          userId,
           symbol: t.symbol,
           strategy: section,
           side,

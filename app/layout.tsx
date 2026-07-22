@@ -12,7 +12,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider afterSignOutUrl="/">
       <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
         <body style={{
           margin: 0, padding: 0,

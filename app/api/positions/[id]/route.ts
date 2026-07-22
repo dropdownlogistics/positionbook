@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireUserId } from "@/lib/auth"
 
 type ClosePayload = {
   exitPrice?: number | string
@@ -18,6 +19,9 @@ function num(v: unknown): number | null {
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await requireUserId()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const { id } = await ctx.params
     const body = await req.json().catch(() => null) as ClosePayload | null
     if (!body) {
@@ -37,6 +41,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "exitDate is not a valid date" }, { status: 400 })
     }
 
+    // NOT YET ownership-scoped. The correct guard is
+    // `where: { id, userId }`, but every existing row carries the legacy
+    // userId "alex", so scoping now would make all 36 positions unclosable.
+    // Closes together with the data migration that reassigns those rows.
     const existing = await prisma.position.findUnique({ where: { id } })
     if (!existing) {
       return NextResponse.json({ error: "Position not found" }, { status: 404 })

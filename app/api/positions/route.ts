@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireUserId } from "@/lib/auth"
 
 export async function GET() {
   try {
+    const userId = await requireUserId()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // NOT YET SCOPED to `where: { userId }`. Every existing row carries the
+    // legacy userId "alex"; scoping now would render the dashboard empty.
+    // Closes together with the data migration that reassigns those rows.
     const positions = await prisma.position.findMany({
       orderBy: { entryDate: "desc" },
     })
@@ -15,10 +22,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const userId = await requireUserId()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const body = await request.json()
     const position = await prisma.position.create({
       data: {
-        userId: "alex",
+        userId,
         symbol: body.symbol,
         strategy: body.strategy,
         side: body.side,

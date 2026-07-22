@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireUserId } from "@/lib/auth"
 
 type IncomingPosition = {
   symbol: string
@@ -17,16 +18,20 @@ type IncomingPosition = {
 export async function POST(req: NextRequest) {
   const errors: string[] = []
   try {
-    const body = await req.json() as { positions?: IncomingPosition[]; userId?: string }
-    if (!body?.userId || !Array.isArray(body?.positions)) {
-      return NextResponse.json({ created: 0, errors: ["positions[] and userId required"] }, { status: 400 })
+    // userId is derived from the session, never accepted from the caller.
+    const userId = await requireUserId()
+    if (!userId) return NextResponse.json({ created: 0, errors: ["Unauthorized"] }, { status: 401 })
+
+    const body = await req.json() as { positions?: IncomingPosition[] }
+    if (!Array.isArray(body?.positions)) {
+      return NextResponse.json({ created: 0, errors: ["positions[] required"] }, { status: 400 })
     }
     if (body.positions.length === 0) {
       return NextResponse.json({ created: 0, errors: [] })
     }
 
     const rows = body.positions.map(p => ({
-      userId: body.userId!,
+      userId,
       symbol: p.symbol,
       strategy: p.strategy,
       side: p.side,
