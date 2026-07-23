@@ -1,10 +1,18 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"])
+// The Clerk webhook carries a signature, not a session, so it cannot pass
+// auth.protect(). It authenticates itself via verifyWebhook() in the handler.
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/webhooks/clerk",
+])
 
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
-    await auth.protect()
+    // Send signed-out visitors to sign-in rather than returning a bare 404.
+    await auth.protect({ unauthenticatedUrl: new URL("/sign-in", request.url).toString() })
   }
 })
 
