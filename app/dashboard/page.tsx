@@ -1,27 +1,8 @@
 "use client"
 import { useState, useEffect } from "react"
 import { UserButton } from "@clerk/nextjs"
-
-type Position = {
-  id: string
-  symbol: string
-  strategy: string
-  side: string
-  status: string
-  entryPrice: number
-  exitPrice: number | null
-  stopPrice: number | null
-  shares: number | null
-  entryDate: string
-  rMultiple: number | null
-  pctReturn: number | null
-  dataQuality: string | null
-  netPnl: number | null
-  broker: string | null
-  fees: number | null
-  exitSignal: string | null
-  contextNote: string | null
-}
+import StrategyBreakdown from "./StrategyBreakdown"
+import type { Position } from "./types"
 
 const fmt = (n: number) => n >= 0 ? "+$" + n.toFixed(2) : "-$" + Math.abs(n).toFixed(2)
 
@@ -529,6 +510,8 @@ export default function Dashboard() {
           <button key={f} style={toggleBtn(filter === f)} onClick={() => setFilter(f)}>{f}</button>
         ))}
       </div>
+
+      {!loading && positions.length > 0 && <StrategyBreakdown positions={positions} />}
 
       {loadError && <div style={s.errorBox}>{loadError}</div>}
 
