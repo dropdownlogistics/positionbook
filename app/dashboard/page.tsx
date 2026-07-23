@@ -14,6 +14,8 @@ type Position = {
   shares: number | null
   entryDate: string
   rMultiple: number | null
+  pctReturn: number | null
+  dataQuality: string | null
   netPnl: number | null
   broker: string | null
   fees: number | null
@@ -253,27 +255,44 @@ export default function Dashboard() {
   const closed = positions.filter(p => p.status === "CLOSED")
   const open = positions.filter(p => p.status === "OPEN")
 
-  // Only closed positions that actually carry a netPnl can be scored win/loss.
-  // Closed rows with netPnl === null are excluded from both numerator and denominator.
-  const scored = closed.filter(p => p.netPnl !== null)
-  const wins = scored.filter(p => p.netPnl !== null && p.netPnl > 0)
+  // SEED rows carry fabricated entry prices and dates (seeded with $0.00 /
+  // 2026-01-02 where the source had blanks). They are excluded from every
+  // metric — counting them was what produced a 100% win rate.
+  const real = closed.filter(p => p.dataQuality !== "SEED")
+
+  // A trade is scorable if it carries either a dollar result or a percent
+  // result. Historical rows have pctReturn but no netPnl (position size was
+  // never recorded); future rows closed through the UI will have both.
+  const scored = real.filter(p => p.netPnl !== null || p.pctReturn !== null)
+  const isWin = (p: Position) => p.netPnl !== null ? p.netPnl > 0 : (p.pctReturn as number) > 0
+  const wins = scored.filter(isWin)
   const winRate = scored.length ? ((wins.length / scored.length) * 100).toFixed(1) : null
 
-  // Average R over rows that have an R value — not over all closed rows.
-  const rScored = closed.filter(p => p.rMultiple !== null)
+  // Average percent return — the only performance metric available on
+  // historical trades.
+  const pctScored = real.filter(p => p.pctReturn !== null)
+  const avgPct = pctScored.length
+    ? (pctScored.reduce((a, p) => a + (p.pctReturn as number), 0) / pctScored.length).toFixed(2)
+    : null
+
+  // Average R. Null until positions are closed with a stopPrice on record —
+  // no historical row has one, so this reads "-" by design, not by omission.
+  const rScored = real.filter(p => p.rMultiple !== null)
   const avgR = rScored.length
     ? (rScored.reduce((a, p) => a + (p.rMultiple as number), 0) / rScored.length).toFixed(2)
     : null
 
-  const netPnl = scored.reduce((a, p) => a + (p.netPnl as number), 0)
+  const pnlScored = real.filter(p => p.netPnl !== null)
+  const netPnl = pnlScored.reduce((a, p) => a + (p.netPnl as number), 0)
   const visible = filter === "ALL" ? positions : positions.filter(p => p.status === filter)
 
   const kpis = [
     { label: "Total Positions", value: String(positions.length), color: "#e8f0f7" },
     { label: "Open", value: String(open.length), color: "#C49A3C" },
-    { label: "Win Rate", value: winRate !== null ? winRate + "%" : "-", color: "#e8f0f7" },
+    { label: `Win Rate (${scored.length})`, value: winRate !== null ? winRate + "%" : "-", color: "#e8f0f7" },
+    { label: "Avg Return", value: avgPct !== null ? avgPct + "%" : "-", color: avgPct !== null && Number(avgPct) >= 0 ? "#86EFAC" : "#f87171" },
     { label: "Avg R-Multiple", value: avgR !== null ? avgR + "R" : "-", color: "#86EFAC" },
-    { label: "Net PnL", value: scored.length ? fmt(netPnl) : "-", color: netPnl >= 0 ? "#86EFAC" : "#f87171" },
+    { label: "Net PnL", value: pnlScored.length ? fmt(netPnl) : "-", color: netPnl >= 0 ? "#86EFAC" : "#f87171" },
   ]
 
   const s = {
@@ -281,7 +300,7 @@ export default function Dashboard() {
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" },
     title: { fontSize: "22px", fontWeight: 700, color: "#e8f0f7", letterSpacing: "-0.5px" },
     titleAccent: { color: "#86EFAC" },
-    kpiRow: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px", marginBottom: "28px" },
+    kpiRow: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px", marginBottom: "28px" },
     kpiCard: { backgroundColor: "#0d1c2a", borderRadius: "10px", padding: "18px 20px", border: "1px solid #1a3044" },
     kpiLabel: { fontSize: "11px", color: "#3d6480", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "8px" },
     kpiValue: { fontSize: "24px", fontWeight: 700, fontFamily: "var(--font-mono, JetBrains Mono), monospace" },
@@ -521,7 +540,7 @@ export default function Dashboard() {
         <table style={s.table}>
           <thead>
             <tr>
-              {["Symbol","Side","Strategy","Entry","Stop","Exit","Shares","R","PnL","Date","Status",""].map((h, i) => (
+              {["Symbol","Side","Strategy","Entry","Stop","Exit","Shares","%","R","PnL","Date","Status",""].map((h, i) => (
                 <th key={i} style={s.th}>{h}</th>
               ))}
             </tr>
@@ -529,7 +548,12 @@ export default function Dashboard() {
           <tbody>
             {visible.map(p => (
               <tr key={p.id}>
-                <td style={{ ...s.td, color: "#86EFAC", fontWeight: 700 }}>{p.symbol}</td>
+                <td style={{ ...s.td, color: "#86EFAC", fontWeight: 700 }}>
+                  {p.symbol}
+                  {p.dataQuality === "SEED" && (
+                    <span title="Fabricated seed data — excluded from all metrics" style={{ marginLeft: "6px", fontSize: "9px", color: "#C49A3C", border: "1px solid #C49A3C", borderRadius: "3px", padding: "1px 4px", fontWeight: 700 }}>SEED</span>
+                  )}
+                </td>
                 <td style={s.td}><span style={badge(p.side)}>{p.side}</span></td>
                 <td style={{ ...s.td, color: "#3d6480" }}>{p.strategy}</td>
                 <td style={s.td}>${p.entryPrice.toFixed(2)}</td>
@@ -538,6 +562,9 @@ export default function Dashboard() {
                 </td>
                 <td style={s.td}>{p.exitPrice !== null ? "$" + Number(p.exitPrice).toFixed(2) : "-"}</td>
                 <td style={s.td}>{p.shares !== null ? p.shares : "-"}</td>
+                <td style={{ ...s.td, color: p.pctReturn !== null ? (p.pctReturn >= 0 ? "#86EFAC" : "#f87171") : "#3d6480" }}>
+                  {p.pctReturn !== null ? (p.pctReturn >= 0 ? "+" : "") + p.pctReturn.toFixed(2) + "%" : "-"}
+                </td>
                 <td style={s.td}>{p.rMultiple !== null ? p.rMultiple + "R" : "-"}</td>
                 <td style={{ ...s.td, color: p.netPnl !== null ? (p.netPnl >= 0 ? "#86EFAC" : "#f87171") : "#3d6480" }}>
                   {p.netPnl !== null ? fmt(p.netPnl) : "-"}

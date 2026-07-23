@@ -1,0 +1,21 @@
+import { PrismaClient } from "@prisma/client"
+import { PrismaNeon } from "@prisma/adapter-neon"
+const prisma = new PrismaClient({ adapter: new PrismaNeon({ connectionString: process.env.DATABASE_URL }) })
+const positions = await prisma.position.findMany()
+const closed = positions.filter(p => p.status === "CLOSED")
+const open = positions.filter(p => p.status === "OPEN")
+const real = closed.filter(p => p.dataQuality !== "SEED")
+const scored = real.filter(p => p.netPnl !== null || p.pctReturn !== null)
+const isWin = p => p.netPnl !== null ? p.netPnl > 0 : p.pctReturn > 0
+const wins = scored.filter(isWin)
+const pctScored = real.filter(p => p.pctReturn !== null)
+const rScored = real.filter(p => p.rMultiple !== null)
+const pnlScored = real.filter(p => p.netPnl !== null)
+console.log(`  Total Positions : ${positions.length}`)
+console.log(`  Open            : ${open.length}`)
+console.log(`  Win Rate (${scored.length})   : ${scored.length ? ((wins.length/scored.length)*100).toFixed(1)+"%" : "-"}   [${wins.length}W / ${scored.length-wins.length}L]`)
+console.log(`  Avg Return      : ${pctScored.length ? (pctScored.reduce((a,p)=>a+p.pctReturn,0)/pctScored.length).toFixed(2)+"%" : "-"}`)
+console.log(`  Avg R-Multiple  : ${rScored.length ? (rScored.reduce((a,p)=>a+p.rMultiple,0)/rScored.length).toFixed(2)+"R" : "-"}`)
+console.log(`  Net PnL         : ${pnlScored.length ? "$"+pnlScored.reduce((a,p)=>a+p.netPnl,0).toFixed(2) : "-"}`)
+console.log(`\n  excluded as SEED: ${closed.filter(p=>p.dataQuality==="SEED").map(p=>p.symbol).join(", ")}`)
+process.exit(0)
