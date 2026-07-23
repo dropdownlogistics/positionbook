@@ -84,7 +84,7 @@ export default function Home() {
 
       <nav style={s.nav}>
         <div style={s.logo}>Position<span style={s.logoAccent}>Book</span></div>
-        <Link href="/sign-in" style={s.signInBtn}>Sign In</Link>
+        <span style={s.signInBtn}>Demo</span>
       </nav>
 
       <div style={s.ticker}>
@@ -107,7 +107,7 @@ export default function Home() {
             PositionBook logs every trade, surfaces every pattern, and shows you exactly where your edge is and where it is not.
           </p>
           <div style={s.ctaRow}>
-            <Link href="/sign-in" style={s.ctaPrimary}>Request Access</Link>
+            <a href="mailto:dropdownlogistics@gmail.com?subject=PositionBook%20Access" style={s.ctaPrimary}>Request Access</a>
             <Link href="#features" style={s.ctaSecondary}>See How It Works</Link>
           </div>
         </div>
