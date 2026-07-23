@@ -41,12 +41,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "exitDate is not a valid date" }, { status: 400 })
     }
 
-    // NOT YET ownership-scoped. The correct guard is
-    // `where: { id, userId }`, but every existing row carries the legacy
-    // userId "alex", so scoping now would make all 36 positions unclosable.
-    // Closes together with the data migration that reassigns those rows.
     const existing = await prisma.position.findUnique({ where: { id } })
-    if (!existing) {
+    if (!existing || existing.userId !== userId) {
       return NextResponse.json({ error: "Position not found" }, { status: 404 })
     }
 

@@ -7,10 +7,8 @@ export async function GET() {
     const userId = await requireUserId()
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // NOT YET SCOPED to `where: { userId }`. Every existing row carries the
-    // legacy userId "alex"; scoping now would render the dashboard empty.
-    // Closes together with the data migration that reassigns those rows.
     const positions = await prisma.position.findMany({
+      where: { userId },
       orderBy: { entryDate: "desc" },
     })
     return NextResponse.json(positions)
