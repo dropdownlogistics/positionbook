@@ -9,11 +9,21 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/clerk",
 ])
 
+const isApiRoute = createRouteMatcher(["/api/(.*)"])
+
 export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    // Send signed-out visitors to sign-in rather than returning a bare 404.
-    await auth.protect({ unauthenticatedUrl: new URL("/sign-in", request.url).toString() })
+  if (isPublicRoute(request)) return
+
+  // API routes must fail as APIs. Redirecting them to /sign-in hands the
+  // caller an HTML page where JSON is expected, so fetch() sees a 200 of
+  // markup instead of an auth failure.
+  if (isApiRoute(request)) {
+    await auth.protect()
+    return
   }
+
+  // Pages redirect to sign-in rather than returning a bare 404.
+  await auth.protect({ unauthenticatedUrl: new URL("/sign-in", request.url).toString() })
 })
 
 export const config = {
